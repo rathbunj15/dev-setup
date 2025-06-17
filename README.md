@@ -7,7 +7,7 @@ The following packages/tools are installed when running the `dev-setup` script.
 <ul>
     <li>Python 3.12</li>
     <li>Ansible</li>
-    <li>gitp <i>(located at bin/gitp)</i></li>
+    <li>gitp <i>(located at <a href=bin/gitp>bin/gitp</a>)</i></li>
 </ul>
 
 ## Repository structure
@@ -25,3 +25,4 @@ The following packages/tools are installed when running the `dev-setup` script.
         </ul>
     </li>
 </ul>
+
