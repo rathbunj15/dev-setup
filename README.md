@@ -3,12 +3,12 @@ This repository contains scripts and playbooks for configuring and installing th
 
 ## Installed Tools
 The following packages/tools are installed when running the `dev-setup.sh` script.
-<ol>
+<ul>
     <li>Python 3</li>
     <li>Ansible</li>
-</ol>
+</ul>
 
 Custom Scripts:
-<ol>
+<ul>
     <li>gitp - located at bin/gitp</li>
-</ol>
+</ul>
