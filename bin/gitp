@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# gitp - A simple script to add, commit, and push changes to a Git repository.
+#
+# Copyright (©) 2025 rathbunj15 <rathbunj15@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+# Usage: gitp <commit message>
+# Example: gitp "Updated README and added new feature"
+
+if [ -z "$1" ]; then
+    echo "Usage: gitp <commit message>"
+    exit 1
+fi
+
+# Check if the current directory is a Git repository
+if [ ! -d ".git" ]; then
+    echo "Error: This directory is not a Git repository."
+    exit 1
+fi
+
+# Add all changes to the staging area
+git add .
+
+# Commit the changes with the provided commit message
+git commit -m "$1"
+
+# Push the changes to the remote repository
+git push
+
+# Check if the push was successful
+if [ $? -eq 0 ]; then
+    echo "Changes pushed successfully."
+else
+    echo "Error: Failed to push changes."
+    exit 1
+fi

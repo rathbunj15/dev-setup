@@ -1,0 +1,88 @@
+#!/bin/bash
+
+declare -A OS_MAPPED_REQUIRED_PACKAGES
+
+OS_MAPPED_REQUIRED_PACKAGES["Ubuntu"]="python3 software-properties-common ansible"
+
+OS_NAME=$(source /etc/os-release && echo "$NAME")
+
+function get_package_manager() {
+    pkg_mgr=""
+
+    case "$OS_NAME" in
+        Ubuntu*|Debian*|"Linux Mint"*)
+            pkg_mgr=$(readlink -f $(which apt-get))
+            ;;
+
+        SUSE*|*SUSE*|SLES*|"Red Hat Enterprise Linux"*)
+            pkg_mgr=$(readlink -f $(which zypper))
+            ;;
+
+        Fedora*|CentOS*)
+            # Fedora and CentOS use DNF or YUM
+            if $(command -v dnf) &> /dev/null; then
+                pkg_mgr=$(readlink -f $(which dnf))
+            elif $(command -v yum) &> /dev/null; then
+                echo "System does not have dnf installed, using yum instead."
+                pkg_mgr=$(readlink -f $(which yum))
+            fi
+            ;;
+
+        *)
+            echo "Unsupported OS: $OS_NAME"
+            exit 1
+            ;;
+    esac
+
+    echo "Using detected package manager $(basename $pkg_mgr)"
+    echo $pkg_mgr
+}
+
+function install_required_repos() {
+    case "$OS_NAME" in
+        Ubuntu*|Debian*|"Linux Mint"*)
+            repos=('ppa:ansible/ansible')
+            for repo in "${repos[@]}"; do
+                if [[ ! $(grep -rh "$pkg" /etc/apt/sources.list /etc/apt/sources.list.d/) ]]; then
+                    echo "Installing package repository $repo..."
+                    add-apt-repository --yes --update $repo > /dev/null
+                else
+                    echo "Repository $repo already installed. Skipping..."
+                fi
+            done
+            ;;
+    esac
+}
+
+# Install required packages
+function install_required_package() {
+    IFS=' '
+
+    # Read the correct array of packages and split them on the IFS (space)
+    read -ra os_packages <<< "${OS_MAPPED_REQUIRED_PACKAGES[$OS_NAME]}"
+
+    for pkg in "${os_packages[@]}"; do
+
+        
+        if [[ ! $(which "$pkg") ]]; then
+            echo "Installing package $pkg..."
+            $1 install -y $pkg > /dev/null
+
+            if [[ $? != 0 ]]; then
+                echo "Error: Failed to install $pkg..."
+                exit 1
+            fi
+
+            echo "Successfully installed package $pkg."
+        else
+            echo "Package $pkg is already installed."
+        fi
+    done
+}
+
+pkg_mgr_path=$(get_package_manager | tail -n 1)
+
+install_required_repos
+install_required_package $pkg_mgr_path
+
+ansible-playbook playbooks/install-scripts.yaml

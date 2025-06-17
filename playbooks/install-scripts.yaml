@@ -1,0 +1,27 @@
+---
+- name: Install scripts into the local system
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    scripts_src: "{{ playbook_dir | dirname }}/bin"
+    scripts_dest: "/usr/local/bin"
+    scripts:
+      - gitp
+      
+  tasks:
+    - name: Install scripts
+      ansible.builtin.copy:
+        src: "{{ scripts_src }}/{{ item }}"
+        dest: "{{ scripts_dest }}/{{ item }}"
+        mode: '0755'
+      loop: "{{ scripts }}"
+      become: true
+      tags: install-scripts
+
+    - name: Ensure scripts are executable
+      ansible.builtin.file:
+        path: "{{ scripts_dest }}/{{ item }}"
+        mode: '0755'
+      become: true
+      loop: "{{ scripts }}"
