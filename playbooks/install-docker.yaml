@@ -1,0 +1,56 @@
+---
+- name: Install Docker Engine and Docker Packages
+  hosts: localhost
+  gather_facts: true
+
+  # Install the docker engine, then all of the docker packages.
+  vars:
+    docker_packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    docker_repo: "https://download.docker.com/linux/ubuntu"
+    docker_gpg_key: "https://download.docker.com/linux/ubuntu/gpg"
+    docker_apt_key: "https://download.docker.com/linux/ubuntu/gpg"
+    docker_apt_source: "deb [arch=amd64] {{ docker_repo }} {{ ansible_lsb.codename | default(ansible_distribution_release) }} stable"
+
+  tasks:
+    - name: Debug
+      ansible.builtin.debug:
+        msg: "{{ docker_apt_source }}"
+
+    - name: Install prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+      become: true
+
+    - name: Add Docker GPG key
+      ansible.builtin.apt_key:
+        url: "{{ docker_gpg_key }}"
+        state: present
+        validate_certs: true
+
+    - name: Add Docker APT repository
+      ansible.builtin.apt_repository:
+        repo: "{{ docker_apt_source }}"
+        state: present
+        filename: "docker"
+        update_cache: true
+
+    - name: Install Docker packages
+      ansible.builtin.apt:
+        name: "{{ docker_packages }}"
+        state: present
+      become: true
+
+    - name: Ensure Docker service is running and enabled
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+      become: true

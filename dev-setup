@@ -60,7 +60,7 @@ function install_required_repos() {
         Ubuntu*|Debian*|"Linux Mint"*)
             repos=('ppa:ansible/ansible')
             for repo in "${repos[@]}"; do
-                if [[ ! $(grep -rh "$pkg" /etc/apt/sources.list /etc/apt/sources.list.d/) ]]; then
+                if [[ ! $(grep -rh "$pkg" /etc/apt/sources.list.d/) ]]; then
                     echo "Installing package repository $repo..."
                     add-apt-repository --yes --update $repo > /dev/null
                 else
@@ -103,3 +103,11 @@ install_required_repos
 install_required_package $pkg_mgr_path
 
 ansible-playbook playbooks/install-scripts.yaml
+
+echo
+
+# Check for docker being installed.
+if [[ ! $(which docker) ]]; then
+    echo "Docker is not installed. Installing now..."
+    ansible-playbook playbooks/install-docker.yaml
+fi
