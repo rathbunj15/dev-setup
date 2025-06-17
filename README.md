@@ -10,5 +10,5 @@ The following packages/tools are installed when running the `dev-setup.sh` scrip
 
 Custom Scripts:
 <ul>
-    <li>gitp - located at bin/gitp</li>
+    <li>gitp <i>(located at bin/gitp)</i></li>
 </ul>
