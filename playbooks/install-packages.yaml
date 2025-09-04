@@ -1,0 +1,50 @@
+---
+- name: Install development packages into system.
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    packages:
+      - zip
+      - unzip
+      - wget
+      - curl
+      - git
+      - make
+      - jq
+      - jid
+      - screen
+      
+  tasks:
+    - name: Install packages
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ packages }}"
+      become: true
+
+    - name: Install oc (OpenShift CLI)
+      block:
+        - name: Verify oc is not installed
+          ansible.builtin.stat:
+            path: /usr/local/bin/oc
+          register: oc_installed
+
+        - name: Install oc (OpenShift CLI)
+          ansible.builtin.shell: |
+            curl -LOk -o /tmp/oc.tar https://downloads-openshift-console.apps.us1hub.openshift.analog.com/amd64/linux/oc.tar
+            tar -xvf /tmp/oc.tar -C /usr/local/bin
+            rm -f /tmp/oc.tar
+          when: not oc_installed.stat.exists
+
+    - name: Install helm
+      block:
+        - name: Verify helm is not installed
+          ansible.builtin.stat:
+            path: /usr/local/bin/helm
+          register: helm_installed
+
+        - name: Install helm
+          ansible.builtin.shell: |
+            curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          when: not helm_installed.stat.exists

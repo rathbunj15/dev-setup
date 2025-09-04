@@ -1,3 +1,8 @@
+#!/bin/bash
+
+# mkscript - A simple script to create a new bash script with executable 
+# permissions.
+#
 # Copyright (©) 2025 rathbunj15 <rathbunj15@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -13,31 +18,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
----
-- name: Install scripts into the local system
-  hosts: localhost
-  gather_facts: false
+# Usage: mkscript <script name>
+# Example: mkscript run-update.sh
 
-  vars:
-    scripts_src: "{{ playbook_dir | dirname }}/bin"
-    scripts_dest: "/usr/local/bin"
-    scripts:
-      - gitp
-      - mkscript
-      
-  tasks:
-    - name: Install scripts
-      ansible.builtin.copy:
-        src: "{{ scripts_src }}/{{ item }}"
-        dest: "{{ scripts_dest }}/{{ item }}"
-        mode: '0755'
-      loop: "{{ scripts }}"
-      become: true
-      tags: install-scripts
+if [[ -z "$1" ]]; then
+    echo "Usage: mkscript <script name>"
+    exit 1
+fi
 
-    - name: Ensure scripts are executable
-      ansible.builtin.file:
-        path: "{{ scripts_dest }}/{{ item }}"
-        mode: '0755'
-      become: true
-      loop: "{{ scripts }}"
+if [[ -f $1 ]]; then
+    echo "Script '$1' already exists."
+    exit 1
+fi
+
+echo "#!/bin/bash" > "$1"
+
+chmod +x "$1"
+echo "Script '$1' created successfully."

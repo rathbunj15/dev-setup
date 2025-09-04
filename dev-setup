@@ -79,7 +79,6 @@ function install_required_package() {
     read -ra os_packages <<< "${OS_MAPPED_REQUIRED_PACKAGES[$OS_NAME]}"
 
     for pkg in "${os_packages[@]}"; do
-
         
         if [[ ! $(which "$pkg") ]]; then
             echo "Installing package $pkg..."
@@ -102,12 +101,19 @@ pkg_mgr_path=$(get_package_manager | tail -n 1)
 install_required_repos
 install_required_package $pkg_mgr_path
 
-ansible-playbook playbooks/install-scripts.yaml
-
-echo
-
 # Check for docker being installed.
 if [[ ! $(which docker) ]]; then
-    echo "Docker is not installed. Installing now..."
+    echo -e "\nDocker is not installed. Installing now..."
     ansible-playbook playbooks/install-docker.yaml
 fi
+
+# Check that all bin scripts are installed in /usr/local/bin.
+for file in bin/*; do
+    if [[ ! -f "/usr/local/bin/$(basename $file)" ]]; then
+        echo -e "\nScript $(basename $file) is not installed. Reinstalling all scripts..."
+        ansible-playbook playbooks/install-scripts.yaml
+        break
+    fi
+done
+
+ansible-playbook playbooks/install-packages.yaml
