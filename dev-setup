@@ -22,6 +22,7 @@ declare -A OS_MAPPED_REQUIRED_PACKAGES
 OS_MAPPED_REQUIRED_PACKAGES["Ubuntu"]="python3 software-properties-common ansible"
 
 OS_NAME=$(source /etc/os-release && echo "$NAME")
+VERBOSE=false
 
 function get_package_manager() {
     pkg_mgr=""
@@ -51,7 +52,10 @@ function get_package_manager() {
             ;;
     esac
 
-    echo "Using detected package manager $(basename $pkg_mgr)"
+    if [[ $VERBOSE == true ]]; then
+        echo "Using detected package manager $(basename $pkg_mgr)"
+    fi
+    
     echo $pkg_mgr
 }
 
@@ -61,18 +65,23 @@ function install_required_repos() {
             repos=('ppa:ansible/ansible')
             for repo in "${repos[@]}"; do
                 if [[ ! $(grep -rh "$pkg" /etc/apt/sources.list.d/) ]]; then
-                    echo "Installing package repository $repo..."
+                    if [[ $VERBOSE == true ]]; then
+                        echo "Installing package repository $repo..."
+                    fi
+
                     add-apt-repository --yes --update $repo > /dev/null
                 else
-                    echo "Repository $repo already installed. Skipping..."
+                    # Only print if the verbose flag is enabled
+                    if [[ $VERBOSE == true ]]; then
+                        echo "Repository $repo already installed. Skipping..."
+                    fi
                 fi
             done
             ;;
     esac
 }
 
-# Install required packages
-function install_required_package() {
+function install_required_packages() {
     IFS=' '
 
     # Read the correct array of packages and split them on the IFS (space)
@@ -81,7 +90,11 @@ function install_required_package() {
     for pkg in "${os_packages[@]}"; do
         
         if [[ ! $(which "$pkg") ]]; then
-            echo "Installing package $pkg..."
+            if [[ $VERBOSE == true ]]; then
+                echo "Installing package $pkg..."
+            fi
+
+            # Install the package.
             $1 install -y $pkg > /dev/null
 
             if [[ $? != 0 ]]; then
@@ -89,31 +102,106 @@ function install_required_package() {
                 exit 1
             fi
 
-            echo "Successfully installed package $pkg."
+            if [[ $VERBOSE == true ]]; then
+                echo "Successfully installed package $pkg."
+            fi
         else
-            echo "Package $pkg is already installed."
+            if [[ $VERBOSE == true ]]; then
+                echo "Package $pkg is already installed."
+            fi
         fi
     done
+}
+
+function help() {
+    local code=$1
+    echo """
+Usage: dev-setup [options]
+
+Install tools, packages, scripts, and docker onto the local system.
+
+Options:
+    -v, --verbose      Enable verbose output
+    -p, --packages     Install only packages using the system's default package manager.
+    -d, --docker       Install only docker
+    -a, --aliases      Install only aliases (inserted into ~/.bashrc file)
+    -s, --scripts      Install only scripts (copied to /usr/local/bin)
+"""
+    exit $1
+}
+
+function isDockerInstalled() {
+    # Verify that docker is installed.
+    if [[ ! $(which docker) ]]; then
+        return false
+    fi
+
+    return true
+}
+
+function areAllScriptsInstalled() {
+    # Check that all bin scripts are installed in /usr/local/bin.
+    for file in bin/*; do
+        if [[ ! -f "/usr/local/bin/$(basename $file)" ]]; then
+            echo -e "\nScript $(basename $file) is not installed. Reinstalling all scripts..."
+            return false
+        fi
+    done
+
+    return true
+}
+
+function runPlaybook() {
+    local playbookLocation="playbooks/$1"
+    ansible-playbook $playbookLocation
+}
+
+function parse_args() {
+    installAll=true
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -a|--aliases)
+                installAll=false
+                #runPlaybook install-aliases.yaml
+                shift
+                ;;
+            -s|--scripts)
+                installAll=false
+                runPlaybook install-scripts.yaml
+                shift
+                ;;
+            -d|--docker)
+                installAll=false
+                runPlaybook install-docker.yaml
+                shift
+                ;;
+            -p|--packages)
+                installAll=false
+                runPlaybook install-packages.yaml
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            -h|--help)
+                help 0
+                ;;
+            *)
+                echo "Unknown argument: $1"
+                help 1
+                ;;
+        esac
+    done
+
+    if [[ $installAll == true ]]; then
+        install_required_packages $pkg_mgr_path
+    fi
 }
 
 pkg_mgr_path=$(get_package_manager | tail -n 1)
 
 install_required_repos
-install_required_package $pkg_mgr_path
+install_required_packages $pkg_mgr_path
 
-# Check for docker being installed.
-if [[ ! $(which docker) ]]; then
-    echo -e "\nDocker is not installed. Installing now..."
-    ansible-playbook playbooks/install-docker.yaml
-fi
-
-# Check that all bin scripts are installed in /usr/local/bin.
-for file in bin/*; do
-    if [[ ! -f "/usr/local/bin/$(basename $file)" ]]; then
-        echo -e "\nScript $(basename $file) is not installed. Reinstalling all scripts..."
-        ansible-playbook playbooks/install-scripts.yaml
-        break
-    fi
-done
-
-ansible-playbook playbooks/install-packages.yaml
+parse_args "$@"
