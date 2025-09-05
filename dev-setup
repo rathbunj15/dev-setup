@@ -19,7 +19,7 @@
 
 declare -A OS_MAPPED_REQUIRED_PACKAGES
 
-OS_MAPPED_REQUIRED_PACKAGES["Ubuntu"]="python3 software-properties-common ansible"
+OS_MAPPED_REQUIRED_PACKAGES["Ubuntu"]="python3 python3-pip software-properties-common ansible"
 
 OS_NAME=$(source /etc/os-release && echo "$NAME")
 VERBOSE=false
@@ -162,7 +162,7 @@ function parse_args() {
         case $1 in
             -a|--aliases)
                 installAll=false
-                #runPlaybook install-aliases.yaml
+                runPlaybook install-aliases.yaml
                 shift
                 ;;
             -s|--scripts)

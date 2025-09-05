@@ -1,0 +1,16 @@
+---
+- name: Install aliases to user's bash
+  hosts: localhost
+  gather_facts: true
+
+  vars:
+    aliases_src: "{{ playbook_dir | dirname }}/misc/aliases"
+    aliases_dest: "{{ ansible_env.HOME }}/.bash_aliases"
+
+  tasks:
+    - name: Copy aliases to {{ aliases_dest }}
+      ansible.builtin.blockinfile:
+        path: "{{ aliases_dest }}"
+        marker: "# {mark} ANSIBLE MANAGED ALIASES - DO NOT EDIT"
+        block: "{{ lookup('file', aliases_src) }}"
+        create: yes
