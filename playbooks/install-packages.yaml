@@ -29,7 +29,6 @@
       - jq
       - jid
       - screen
-    oc_download_url: https://downloads-openshift-console.apps.us1hub.openshift.analog.com/amd64/linux/oc.tar
 
   tasks:
     - name: Install packages
@@ -38,20 +37,6 @@
         state: present
       loop: "{{ packages }}"
       become: true
-
-    - name: Install oc (OpenShift CLI)
-      block:
-        - name: Verify oc is not installed
-          ansible.builtin.stat:
-            path: /usr/local/bin/oc
-          register: oc_installed
-
-        - name: Untar and move oc binary to /usr/local/bin
-          ansible.builtin.unarchive:
-            src: "{{ oc_download_url }}"
-            dest: /usr/local/bin
-            remote_src: true
-          when: not oc_installed.stat.exists
 
     - name: Install helm
       block:

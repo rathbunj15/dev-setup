@@ -153,7 +153,7 @@ function areAllScriptsInstalled() {
 
 function runPlaybook() {
     local playbookLocation="playbooks/$1"
-    ansible-playbook $playbookLocation
+    ansible-playbook $playbookLocation ${@:2}
 }
 
 function parse_args() {
@@ -179,6 +179,11 @@ function parse_args() {
                 installAll=false
                 runPlaybook install-packages.yaml
                 shift
+                ;;
+            -oc|--openshift-cli)
+                installAll=false
+                runPlaybook install-openshift-cli.yaml -e "oc_url=$2"
+                shift 2
                 ;;
             -v|--verbose)
                 VERBOSE=true
