@@ -19,6 +19,7 @@
 
   vars:
     packages:
+      - ansible-lint
       - zip
       - unzip
       - wget
@@ -28,7 +29,7 @@
       - jq
       - jid
       - screen
-      
+
   tasks:
     - name: Install packages
       ansible.builtin.package:
@@ -37,20 +38,6 @@
       loop: "{{ packages }}"
       become: true
 
-    - name: Install oc (OpenShift CLI)
-      block:
-        - name: Verify oc is not installed
-          ansible.builtin.stat:
-            path: /usr/local/bin/oc
-          register: oc_installed
-
-        - name: Install oc (OpenShift CLI)
-          ansible.builtin.shell: |
-            curl -LOk -o /tmp/oc.tar https://downloads-openshift-console.apps.us1hub.openshift.analog.com/amd64/linux/oc.tar
-            tar -xvf /tmp/oc.tar -C /usr/local/bin
-            rm -f /tmp/oc.tar
-          when: not oc_installed.stat.exists
-
     - name: Install helm
       block:
         - name: Verify helm is not installed
@@ -58,7 +45,17 @@
             path: /usr/local/bin/helm
           register: helm_installed
 
-        - name: Install helm
-          ansible.builtin.shell: |
-            curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        - name: Download Helm install script
+          ansible.builtin.uri:
+            url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+            method: GET
+            dest: /tmp/get-helm-3.sh
+            mode: '0755'
+          when: not helm_installed.stat.exists
+
+        - name: Run Helm install script
+          ansible.builtin.shell: /tmp/get-helm-3.sh
+          args:
+            executable: /bin/bash
+            creates: /usr/local/bin/helm
           when: not helm_installed.stat.exists

@@ -1,0 +1,50 @@
+# Copyright (©) 2025 rathbunj15 <rathbunj15@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# NOTE: oc_url is expected to be provided as an extra var to this playbook.
+---
+- name: Install OpenShift CLI (oc)
+  hosts: localhost
+  gather_facts: true
+  vars:
+    oc_download_url: "{{ oc_url }}" # oc_url is an expected argument.
+
+  tasks:
+    - name: Install oc (OpenShift CLI)
+      block:
+        - name: Verify oc is not installed
+          ansible.builtin.stat:
+            path: /usr/local/bin/oc
+          register: oc_installed
+
+        - name: Download oc tarball
+          ansible.builtin.get_url:
+            url: "{{ oc_download_url }}"
+            dest: /tmp/oc.tar
+            mode: '0755'
+            validate_certs: false
+          when: not oc_installed.stat.exists
+
+        - name: Untar and move oc binary to /usr/local/bin
+          ansible.builtin.unarchive:
+            src: /tmp/oc.tar
+            dest: /usr/local/bin
+          when: not oc_installed.stat.exists
+
+        - name: Remove oc tarball
+          ansible.builtin.file:
+            path: /tmp/oc.tar
+            state: absent
+          when: not oc_installed.stat.exists

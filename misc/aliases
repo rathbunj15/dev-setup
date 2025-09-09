@@ -1,0 +1,15 @@
+alias lsa='ls -lat'
+alias dps='docker ps -a'
+alias di='docker images -a'
+alias dstop="docker stop $(docker ps -qa) 2>/dev/null"
+alias drm="docker rm $(docker ps -qa) 2>/dev/null"
+alias drmi="docker rmi -f $(docker images -qa) 2>/dev/null"
+alias dboom="docker stop $(docker ps -qa) 2>/dev/null || true; docker rm -f $(docker ps -qa) 2>/dev/null || true; docker rmi -f $(docker images -qa) 2>/dev/null || true; docker volume rm $(docker volume ls -q) 2>/dev/null || true; docker network rm $(docker network ls -q | grep -v "bridge\|host\|none") 2>/dev/null || true"
+alias dexec="docker exec -it"
+alias dcu="docker-compose up"
+alias dcd="docker-compose down"
+alias dprune="docker volume rm $(docker volume ls -q) 2>/dev/null || true"
+
+function dbash() {
+    docker exec -it $1 bash
+}
