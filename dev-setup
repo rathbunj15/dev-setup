@@ -126,6 +126,7 @@ Options:
     -d, --docker       Install only docker
     -a, --aliases      Install only aliases (inserted into ~/.bashrc file)
     -s, --scripts      Install only scripts (copied to /usr/local/bin)
+    -oc, --openshift-cli <url>  Install the OpenShift CLI from the provided URL
 """
     exit $1
 }
