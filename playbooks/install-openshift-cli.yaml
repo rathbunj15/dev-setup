@@ -1,4 +1,4 @@
-# Copyright (©) 2025 rathbunj15 <rathbunj15@gmail.com>
+# Copyright (©) 2025-2026 rathbunj15 <rathbunj15@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -12,16 +12,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
-#
-# NOTE: oc_url is an optional argument to be provided as an extra var to this
-# playbook.
 ---
 - name: Install OpenShift CLI (oc)
   hosts: localhost
   gather_facts: true
   vars:
     # oc_url is an optional argument.
-    oc_download_url: "{{ oc_url | default('https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz') }}"
+    oc_download_url: "{{ oc_url | default('https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux-4.21.6.tar.gz') }}"
 
   tasks:
     - name: Install oc (OpenShift CLI)

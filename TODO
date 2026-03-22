@@ -1,0 +1,4 @@
+1. Copy .p10k.zsh - from rathbun-home, need to fix connections and add WSL mount propagation
+2. Patch .zshrc theme
+3. VS Code patch settings to change font
+4. Windows Terminal patch theme and font

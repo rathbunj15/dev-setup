@@ -1,0 +1,57 @@
+# Copyright (©) 2025-2026 rathbunj15 <rathbunj15@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+# Installs zsh, oh-my-zsh, and powerlevel10k.
+---
+- name: Install zsh and oh-my-zsh
+  hosts: localhost
+  gather_facts: true
+
+  vars:
+    oh_my_zsh_install_url: "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
+    powerlevel10k_install_url: "https://github.com/romkatv/powerlevel10k.git"
+  tasks:
+    - name: Install zsh
+      ansible.builtin.package:
+        name: zsh
+        state: present
+      become: true
+
+    - name: Install oh-my-zsh
+      ansible.builtin.shell: |
+        sh -c "$(curl -fsSL {{ oh_my_zsh_install_url }})"
+      args:
+        executable: /bin/bash
+        creates: ~/.oh-my-zsh
+      environment:
+        RUNZSH: "no"
+
+    - name: Install powerlevel10k
+      ansible.builtin.git:
+        repo: "{{ powerlevel10k_install_url }}"
+        dest: "{{ ansible_env.HOME }}/.oh-my-zsh/custom/themes/powerlevel10k"
+        version: master
+
+    - name: Copy .p10k.zsh configuration file
+      ansible.builtin.copy:
+        src: files/.p10k.zsh
+        dest: "{{ ansible_env.HOME }}/.p10k.zsh"
+        mode: '0644'
+
+    - name: Set ZSH_THEME to powerlevel10k/powerlevel10k in .zshrc
+      ansible.builtin.lineinfile:
+        path: "{{ ansible_env.HOME }}/.zshrc"
+        regexp: '^ZSH_THEME='
+        line: 'ZSH_THEME="powerlevel10k/powerlevel10k"'

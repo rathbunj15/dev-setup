@@ -22,12 +22,22 @@ declare -A OS_MAPPED_REQUIRED_PACKAGES
 OS_MAPPED_REQUIRED_PACKAGES["Ubuntu"]="python3 python3-pip software-properties-common ansible"
 
 OS_NAME=$(source /etc/os-release && echo "$NAME")
+
 VERBOSE=false
+install_aliases=true
+install_scripts=true
+install_packages=true
+install_docker=false
+install_oc=false
+install_zsh=false
+oc_url=""
 
 function get_package_manager() {
     pkg_mgr=""
 
-    case "$OS_NAME" in
+    os_name=$(source /etc/os-release && echo "$NAME")
+
+    case "$os_name" in
         Ubuntu*|Debian*|"Linux Mint"*)
             pkg_mgr=$(readlink -f $(which apt-get))
             ;;
@@ -37,7 +47,7 @@ function get_package_manager() {
             ;;
 
         Fedora*|CentOS*)
-            # Fedora and CentOS use DNF or YUM
+            # RHEL, Fedora, and CentOS use DNF or YUM
             if $(command -v dnf) &> /dev/null; then
                 pkg_mgr=$(readlink -f $(which dnf))
             elif $(command -v yum) &> /dev/null; then
@@ -47,7 +57,7 @@ function get_package_manager() {
             ;;
 
         *)
-            echo "Unsupported OS: $OS_NAME"
+            echo "Unsupported OS: $os_name"
             exit 1
             ;;
     esac
@@ -118,15 +128,16 @@ function help() {
     echo """
 Usage: dev-setup [options]
 
-Install tools, packages, scripts, and docker onto the local system.
+Install tools, packages, scripts, aliases, and optionally docker or OpenShift CLI onto the local system.
+
+By default, installs packages, scripts, and aliases. Use flags to install additional components.
+Combined flags are supported, e.g., -dv for docker and verbose.
 
 Options:
-    -v, --verbose      Enable verbose output
-    -p, --packages     Install only packages using the system's default package manager.
-    -d, --docker       Install only docker
-    -a, --aliases      Install only aliases (inserted into ~/.bashrc file)
-    -s, --scripts      Install only scripts (copied to /usr/local/bin)
+    -d, --docker       Install docker
     -oc, --openshift-cli <url>  Install the OpenShift CLI from the provided URL
+    -v, --verbose      Enable verbose output
+    -h, --help         Show this help
 """
     exit $1
 }
@@ -158,51 +169,96 @@ function runPlaybook() {
 }
 
 function parse_args() {
-    installAll=true
     while [[ $# -gt 0 ]]; do
-        case $1 in
-            -a|--aliases)
-                installAll=false
-                runPlaybook install-aliases.yaml
+        if [[ $1 == --* ]]; then
+            case $1 in
+                --docker)
+                    install_docker=true
+                    shift
+                    ;;
+                --openshift-cli)
+                    install_oc=true
+                    oc_url=$2
+                    shift 2
+                    ;;
+                --install-zsh|--zsh*)
+                    install_zsh=true
+                    shift
+                    ;;
+                --verbose)
+                    VERBOSE=true
+                    shift
+                    ;;
+                --help)
+                    help 0
+                    ;;
+                *)
+                    echo "Unknown option: $1"
+                    help 1
+                    ;;
+            esac
+        elif [[ $1 == -* ]]; then
+            if [[ ${#1} -gt 2 ]]; then
+                # combined short options
+                for ((i=1; i<${#1}; i++)); do
+                    char=${1:i:1}
+                    case $char in
+                        d)
+                            install_docker=true
+                            ;;
+                        v)
+                            VERBOSE=true
+                            ;;
+                        h)
+                            help 0
+                            ;;
+                        z)
+                            install_zsh=true
+                            ;;
+                        o)
+                            echo "Cannot combine -o, use -oc or --openshift-cli"
+                            help 1
+                            ;;
+                        *)
+                            echo "Unknown option: -$char"
+                            help 1
+                            ;;
+                    esac
+                done
                 shift
-                ;;
-            -s|--scripts)
-                installAll=false
-                runPlaybook install-scripts.yaml
-                shift
-                ;;
-            -d|--docker)
-                installAll=false
-                runPlaybook install-docker.yaml
-                shift
-                ;;
-            -p|--packages)
-                installAll=false
-                runPlaybook install-packages.yaml
-                shift
-                ;;
-            -oc|--openshift-cli)
-                installAll=false
-                runPlaybook install-openshift-cli.yaml -e "oc_url=$2"
-                shift 2
-                ;;
-            -v|--verbose)
-                VERBOSE=true
-                shift
-                ;;
-            -h|--help)
-                help 0
-                ;;
-            *)
-                echo "Unknown argument: $1"
-                help 1
-                ;;
-        esac
+            else
+                case $1 in
+                    -d)
+                        install_docker=true
+                        shift
+                        ;;
+                    -oc)
+                        install_oc=true
+                        oc_url=$2
+                        shift 2
+                        ;;
+                    -z)
+                        install_zsh=true
+                        shift
+                        ;;
+                    -v)
+                        VERBOSE=true
+                        shift
+                        ;;
+                    -h)
+                        help 0
+                        ;;
+                    *)
+                        echo "Unknown option: $1"
+                        help 1
+                        ;;
+                esac
+            fi
+        else
+            echo "Unknown argument: $1"
+            help 1
+        fi
     done
-
-    if [[ $installAll == true ]]; then
-        install_required_packages $pkg_mgr_path
-    fi
 }
 
 pkg_mgr_path=$(get_package_manager | tail -n 1)
@@ -211,3 +267,27 @@ install_required_repos
 install_required_packages $pkg_mgr_path
 
 parse_args "$@"
+
+if [[ $install_aliases == true ]]; then
+    runPlaybook install-aliases.yaml
+fi
+
+if [[ $install_scripts == true ]]; then
+    runPlaybook install-scripts.yaml
+fi
+
+if [[ $install_packages == true ]]; then
+    runPlaybook install-packages.yaml
+fi
+
+if [[ $install_docker == true ]]; then
+    runPlaybook install-docker.yaml
+fi
+
+if [[ $install_oc == true ]]; then
+    runPlaybook install-openshift-cli.yaml -e "oc_url=$oc_url"
+fi
+
+if [[ $install_zsh == true ]]; then
+    runPlaybook install-zsh.yaml
+fi

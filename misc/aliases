@@ -13,3 +13,5 @@ alias dprune="docker volume rm $(docker volume ls -q) 2>/dev/null || true"
 function dbash() {
     docker exec -it $1 bash
 }
+
+alias FUCK='fuck'

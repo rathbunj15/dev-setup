@@ -1,4 +1,4 @@
-# Copyright (©) 2025 rathbunj15 <rathbunj15@gmail.com>
+# Copyright (©) 2025-2026 rathbunj15 <rathbunj15@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@
       - jq
       - jid
       - screen
+      - yq
 
   tasks:
     - name: Install packages
@@ -51,11 +52,18 @@
             method: GET
             dest: /tmp/get-helm-3.sh
             mode: '0755'
-          when: not helm_installed.stat.exists
+          when: (not helm_installed.stat.exists)
 
         - name: Run Helm install script
           ansible.builtin.shell: /tmp/get-helm-3.sh
           args:
             executable: /bin/bash
             creates: /usr/local/bin/helm
-          when: not helm_installed.stat.exists
+          when: (not helm_installed.stat.exists)
+
+    - name: Install Python Packages
+      ansible.builtin.pip:
+        name:
+          - thefuck
+        state: present
+      become: true
