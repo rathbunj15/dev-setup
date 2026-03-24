@@ -1,0 +1,51 @@
+---
+- name: Configure Windows Terminal for WSL
+  hosts: localhost
+  tasks:
+    - name: Get Windows username
+      ansible.builtin.command: powershell.exe -Command "$env:USERNAME"
+      register: win_user
+      changed_when: false
+
+    - name: Set Terminal settings path
+      ansible.builtin.set_fact:
+        settings_path: "/mnt/c/Users/{{ win_user.stdout | trim }}/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"
+
+    - name: Copy Consolas Nerd Font files to Windows Fonts directory
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: /mnt/c/Users/{{ win_user.stdout | trim }}/AppData/Local/Microsoft/Windows/Fonts/
+      with_fileglob:
+        - "{{ playbook_dir }}/../fonts/cascadia-mono-nf/*.ttf"
+
+    - name: Read and parse terminal schemes from file
+      ansible.builtin.set_fact:
+        schemes: "{{ lookup('file', playbook_dir ~ '/../wsl/schemes.json') | from_json }}"
+
+    - name: Read current settings
+      ansible.builtin.slurp:
+        src: "{{ settings_path }}"
+      register: settings_slurp
+
+    - name: Update Windows Terminal settings using jq
+      vars:
+        # 1. Find the Ubuntu profile and 'as $guid' to save its ID.
+        # 2. Update the font and color settings inside |=
+        # 3. Set the global .defaultProfile to that saved $guid.
+        jq_filter: >-
+          (.profiles.list[] | select(.name == "Ubuntu-24.04")) as $ubuntu |
+          .profiles.defaults.useAcrylic = true |
+          .profiles.defaults.acrylicOpacity = 0.5 |
+          (.profiles.list[] | select(.name == "Ubuntu-24.04")) |= (
+            .colorScheme = "xcad_hackthebox" | 
+            .font.face = "CaskaydiaMono Nerd Font" |
+            .font.size = 11 |
+            .opacity = 20
+          ) |
+          .defaultProfile = $ubuntu.guid |
+          .schemes = $new_schemes
+      ansible.builtin.shell: |
+        jq --argjson new_schemes '{{ schemes | to_json }}' \
+        '{{ jq_filter }}' "{{ settings_path }}" > "{{ settings_path }}.tmp" && \
+        mv "{{ settings_path }}.tmp" "{{ settings_path }}"
+      changed_when: true

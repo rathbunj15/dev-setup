@@ -1,0 +1,87 @@
+# Copyright (©) 2025-2026 rathbunj15 <rathbunj15@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+---
+- name: Configure VS Code terminal font
+  hosts: localhost
+  gather_facts: true
+
+  tasks:
+    - name: Determine target user for VS Code config
+      ansible.builtin.set_fact:
+        target_user: "{{ lookup('env', 'SUDO_USER') | default(ansible_user_id) }}"
+    - name: Configure for WSL
+      when: "'microsoft' in ansible_kernel.lower()"
+      block:
+        - name: Get Windows username
+          ansible.builtin.command: powershell.exe -Command "$env:USERNAME"
+          register: windows_user_result
+          changed_when: false
+
+        - name: Set windows_user fact
+          ansible.builtin.set_fact:
+            windows_user: "{{ windows_user_result.stdout | trim }}"
+
+        - name: Copy Consolas Nerd Font files to Windows Fonts directory
+          ansible.builtin.copy:
+            src: "{{ item }}"
+            dest: /mnt/c/Users/{{ windows_user }}/AppData/Local/Microsoft/Windows/Fonts/
+          with_fileglob:
+            - "{{ playbook_dir }}/../fonts/consolas-nf/*.ttf"
+
+        - name: Check if VS Code is installed on Windows
+          ansible.builtin.stat:
+            path: "/mnt/c/Users/{{ windows_user }}/AppData/Local/Programs/Microsoft VS Code/Code.exe"
+          register: vscode_windows_check
+
+        - name: Configure VS Code settings for WSL
+          ansible.builtin.shell: |
+            SETTINGS_PATH="/mnt/c/Users/{{ windows_user }}/AppData/Roaming/Code/User/settings.json"
+            jq '.["terminal.integrated.fontFamily"] = "Consolas Nerd Font"' "$SETTINGS_PATH" > "$SETTINGS_PATH.tmp" \
+              && mv "$SETTINGS_PATH.tmp" "$SETTINGS_PATH"
+          when: vscode_windows_check.stat.exists
+
+    - name: Configure for Linux
+      when: "not ('microsoft' in ansible_kernel.lower())"
+      block:
+        - name: Create fonts directory
+          ansible.builtin.file:
+            path: /usr/share/fonts/truetype/nerd-fonts
+            state: directory
+            mode: '0755'
+
+        - name: Copy Ubuntu Mono Nerd Font files to system fonts directory
+          ansible.builtin.copy:
+            src: "{{ item }}"
+            dest: /usr/share/fonts/truetype/nerd-fonts/
+          with_fileglob:
+            - "{{ playbook_dir }}/../fonts/ubuntu-mono-nf/*.ttf"
+          become: true
+
+        - name: Update font cache
+          ansible.builtin.command: fc-cache -f -v
+          become: true
+
+        - name: Check if VS Code is installed on Linux
+          ansible.builtin.command: which code
+          register: vscode_linux_check
+          ignore_errors: true
+          changed_when: false
+
+        - name: Configure VS Code settings for Linux
+          ansible.builtin.shell: |
+            SETTINGS_PATH="/home/{{ target_user }}/.config/Code/User/settings.json"
+            jq '.["terminal.integrated.fontFamily"] = "UbuntuMono Nerd Font"' "$SETTINGS_PATH" > "$SETTINGS_PATH.tmp" \
+              && mv "$SETTINGS_PATH.tmp" "$SETTINGS_PATH"
+          when: vscode_linux_check.rc == 0

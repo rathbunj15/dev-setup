@@ -23,13 +23,51 @@ OS_MAPPED_REQUIRED_PACKAGES["Ubuntu"]="python3 python3-pip software-properties-c
 
 OS_NAME=$(source /etc/os-release && echo "$NAME")
 
+# Colorized log helpers
+COLOR_RESET='\033[0m'
+COLOR_GREEN='\033[0;32m'
+COLOR_YELLOW='\033[0;33m'
+COLOR_RED='\033[0;31m'
+COLOR_BLUE='\033[0;34m'
+
+function log_info() {
+    echo -e "${COLOR_GREEN}[INFO]${COLOR_RESET} $*"
+}
+
+function log_warning() {
+    echo -e "${COLOR_YELLOW}[WARN]${COLOR_RESET} $*"
+}
+
+function log_error() {
+    local exit_code=0
+    if [[ "$1" =~ ^[0-9]+$ ]]; then
+        exit_code=$1
+        shift
+    fi
+    echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} $*"
+    if [[ $exit_code -ne 0 ]]; then
+        exit $exit_code
+    fi
+}
+
+function log_debug() {
+    if [[ $VERBOSE == true ]]; then
+        echo -e "${COLOR_BLUE}[DEBUG]${COLOR_RESET} $*"
+    fi
+}
+
 VERBOSE=false
+# install_aliases=false
+# install_scripts=false
+# install_packages=false
 install_aliases=true
 install_scripts=true
 install_packages=true
 install_docker=false
 install_oc=false
 install_zsh=false
+config_vscode=false
+config_windows_terminal=false
 oc_url=""
 
 function get_package_manager() {
@@ -57,13 +95,12 @@ function get_package_manager() {
             ;;
 
         *)
-            echo "Unsupported OS: $os_name"
-            exit 1
+            log_error 1 "Unsupported OS: $os_name"
             ;;
     esac
 
     if [[ $VERBOSE == true ]]; then
-        echo "Using detected package manager $(basename $pkg_mgr)"
+        log_debug "Using detected package manager $(basename $pkg_mgr)"
     fi
     
     echo $pkg_mgr
@@ -75,15 +112,16 @@ function install_required_repos() {
             repos=('ppa:ansible/ansible')
             for repo in "${repos[@]}"; do
                 if [[ ! $(grep -rh "$pkg" /etc/apt/sources.list.d/) ]]; then
+                    # Only print if the verbose flag is enabled
                     if [[ $VERBOSE == true ]]; then
-                        echo "Installing package repository $repo..."
+                        log_debug "Installing package repository $repo..."
                     fi
 
                     add-apt-repository --yes --update $repo > /dev/null
                 else
                     # Only print if the verbose flag is enabled
                     if [[ $VERBOSE == true ]]; then
-                        echo "Repository $repo already installed. Skipping..."
+                        log_debug "Repository $repo already installed. Skipping..."
                     fi
                 fi
             done
@@ -101,23 +139,22 @@ function install_required_packages() {
         
         if [[ ! $(which "$pkg") ]]; then
             if [[ $VERBOSE == true ]]; then
-                echo "Installing package $pkg..."
+                log_debug "Installing package $pkg..."
             fi
 
             # Install the package.
             $1 install -y $pkg > /dev/null
 
             if [[ $? != 0 ]]; then
-                echo "Error: Failed to install $pkg..."
-                exit 1
+                log_error 1 "Failed to install $pkg"
             fi
 
             if [[ $VERBOSE == true ]]; then
-                echo "Successfully installed package $pkg."
+                log_info "Successfully installed package $pkg."
             fi
         else
             if [[ $VERBOSE == true ]]; then
-                echo "Package $pkg is already installed."
+                log_debug "Package $pkg is already installed."
             fi
         fi
     done
@@ -128,42 +165,72 @@ function help() {
     echo """
 Usage: dev-setup [options]
 
-Install tools, packages, scripts, aliases, and optionally docker or OpenShift CLI onto the local system.
+Install tools, packages, scripts, aliases, and optionally docker, OpenShift CLI, or VS Code configs onto the local system.
 
 By default, installs packages, scripts, and aliases. Use flags to install additional components.
 Combined flags are supported, e.g., -dv for docker and verbose.
 
 Options:
     -d, --docker       Install docker
+    -z, --install-zsh   Install zsh and set it as the default shell
+    -c, --config-vscode  Configure VS Code terminal font and settings
     -oc, --openshift-cli <url>  Install the OpenShift CLI from the provided URL
     -v, --verbose      Enable verbose output
     -h, --help         Show this help
+
+This script must be run as root. Use sudo or run as the root user.
 """
     exit $1
 }
 
-function isDockerInstalled() {
-    # Verify that docker is installed.
-    if [[ ! $(which docker) ]]; then
-        return false
+function check_if_root() {
+    if [[ $EUID -ne 0 ]]; then
+        echo "This script must be run as root. Please run with sudo or as root user."
+        exit 1
     fi
-
-    return true
 }
 
-function areAllScriptsInstalled() {
-    # Check that all bin scripts are installed in /usr/local/bin.
+function are_aliases_up_to_date() {
+    local aliases_file="$HOME/.bash_aliases"
+    local source_file="misc/aliases"
+    if [[ ! -f "$aliases_file" ]]; then
+        return 1
+    fi
+    if ! grep -q "ANSIBLE MANAGED ALIASES" "$aliases_file"; then
+        return 1
+    fi
+    local current_block=$(sed -n '/# BEGIN ANSIBLE MANAGED ALIASES/,/# END ANSIBLE MANAGED ALIASES/p' "$aliases_file" | sed '1d;$d')
+    local source_content=$(cat "$source_file")
+    if [[ "$current_block" != "$source_content" ]]; then
+        return 1
+    fi
+    return 0
+}
+
+function are_scripts_up_to_date() {
     for file in bin/*; do
-        if [[ ! -f "/usr/local/bin/$(basename $file)" ]]; then
-            echo -e "\nScript $(basename $file) is not installed. Reinstalling all scripts..."
-            return false
+        local script_name=$(basename "$file")
+        if [[ ! -f "/usr/local/bin/$script_name" ]]; then
+            return 1
+        fi
+        if ! cmp -s "$file" "/usr/local/bin/$script_name"; then
+            return 1
         fi
     done
-
-    return true
+    return 0
 }
 
-function runPlaybook() {
+function are_packages_installed() {
+    local packages=(ansible-lint zip unzip wget curl git make jq jid screen yq thefuck black pylint)
+    for pkg in "${packages[@]}"; do
+        if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
+            return 1
+        fi
+    done
+    return 0
+}
+
+function run_playbook() {
     local playbookLocation="playbooks/$1"
     ansible-playbook $playbookLocation ${@:2}
 }
@@ -183,6 +250,14 @@ function parse_args() {
                     ;;
                 --install-zsh|--zsh*)
                     install_zsh=true
+                    shift
+                    ;;
+                --config-vscode)
+                    config_vscode=true
+                    shift
+                    ;;
+                --config-windows-terminal)
+                    config_windows_terminal=true
                     shift
                     ;;
                 --verbose)
@@ -215,9 +290,11 @@ function parse_args() {
                         z)
                             install_zsh=true
                             ;;
-                        o)
-                            echo "Cannot combine -o, use -oc or --openshift-cli"
-                            help 1
+                        c)
+                            config_vscode=true
+                            ;;
+                        w)
+                            config_windows_terminal=true
                             ;;
                         *)
                             echo "Unknown option: -$char"
@@ -232,6 +309,10 @@ function parse_args() {
                         install_docker=true
                         shift
                         ;;
+                    -c)
+                        config_vscode=true
+                        shift
+                        ;;
                     -oc)
                         install_oc=true
                         oc_url=$2
@@ -239,6 +320,10 @@ function parse_args() {
                         ;;
                     -z)
                         install_zsh=true
+                        shift
+                        ;;
+                    -w)
+                        config_windows_terminal=true
                         shift
                         ;;
                     -v)
@@ -261,33 +346,43 @@ function parse_args() {
     done
 }
 
+parse_args "$@"
+
+check_if_root
+
 pkg_mgr_path=$(get_package_manager | tail -n 1)
 
 install_required_repos
 install_required_packages $pkg_mgr_path
 
-parse_args "$@"
-
-if [[ $install_aliases == true ]]; then
-    runPlaybook install-aliases.yaml
+if [[ $install_aliases == true ]] && ! are_aliases_up_to_date; then
+    run_playbook install-aliases.yaml
 fi
 
-if [[ $install_scripts == true ]]; then
-    runPlaybook install-scripts.yaml
+if [[ $install_scripts == true ]] && ! are_scripts_up_to_date; then
+    run_playbook install-scripts.yaml
 fi
 
-if [[ $install_packages == true ]]; then
-    runPlaybook install-packages.yaml
+if [[ $install_packages == true ]] && ! are_packages_installed; then
+    run_playbook install-packages.yaml
 fi
 
 if [[ $install_docker == true ]]; then
-    runPlaybook install-docker.yaml
+    run_playbook install-docker.yaml
 fi
 
 if [[ $install_oc == true ]]; then
-    runPlaybook install-openshift-cli.yaml -e "oc_url=$oc_url"
+    run_playbook install-openshift-cli.yaml -e "oc_url=$oc_url"
 fi
 
 if [[ $install_zsh == true ]]; then
-    runPlaybook install-zsh.yaml
+    run_playbook install-zsh.yaml
+fi
+
+if [[ $config_vscode == true ]]; then
+    run_playbook config-vscode.yaml
+fi
+
+if [[ $config_windows_terminal == true ]]; then
+    run_playbook config-windows-terminal.yaml
 fi

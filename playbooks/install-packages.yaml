@@ -15,7 +15,7 @@
 ---
 - name: Install development packages into system.
   hosts: localhost
-  gather_facts: false
+  gather_facts: true
 
   vars:
     packages:
@@ -30,6 +30,10 @@
       - jid
       - screen
       - yq
+    py_dev_packages:
+      - thefuck
+      - black
+      - pylint
 
   tasks:
     - name: Install packages
@@ -61,9 +65,17 @@
             creates: /usr/local/bin/helm
           when: (not helm_installed.stat.exists)
 
-    - name: Install Python Packages
-      ansible.builtin.pip:
-        name:
-          - thefuck
-        state: present
+    - name: Determine target non-root user for pip installs
+      ansible.builtin.set_fact:
+        target_user: "{{ lookup('env', 'SUDO_USER') | default(ansible_user_id) }}"
+
+    - name: Determine home directory for target user
+      ansible.builtin.set_fact:
+        target_home: "{{ '/root' if (target_user == 'root') else '/home/' + target_user }}"
+
+    - name: Install Python development packages for target user
+      ansible.builtin.command: "python3 -m pip install --user --break-system-packages {{ py_dev_packages | join(' ') }}"
       become: true
+      become_user: "{{ target_user }}"
+      environment:
+        HOME: "{{ target_home }}"
