@@ -41,7 +41,7 @@
         name: "{{ item }}"
         state: present
       loop: "{{ packages }}"
-      become: true
+      become: false
 
     - name: Install helm
       block:
@@ -75,7 +75,7 @@
 
     - name: Install Python development packages for target user
       ansible.builtin.command: "python3 -m pip install --user --break-system-packages {{ py_dev_packages | join(' ') }}"
-      become: true
-      become_user: "{{ target_user }}"
+      become: false
+      # become_user: "{{ target_user }}"
       environment:
         HOME: "{{ target_home }}"

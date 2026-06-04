@@ -23,20 +23,20 @@
     oh_my_zsh_install_url: "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
     powerlevel10k_install_url: "https://github.com/romkatv/powerlevel10k.git"
   tasks:
-    - name: Install zsh
-      ansible.builtin.package:
-        name: zsh
-        state: present
-      become: true
+    # - name: Install zsh
+    #   ansible.builtin.package:
+    #     name: zsh
+    #     state: present
+    #   become: true
 
-    - name: Install oh-my-zsh
-      ansible.builtin.shell: |
-        sh -c "$(curl -fsSL {{ oh_my_zsh_install_url }})"
-      args:
-        executable: /bin/bash
-        creates: ~/.oh-my-zsh
-      environment:
-        RUNZSH: "no"
+    # - name: Install oh-my-zsh
+    #   ansible.builtin.shell: |
+    #     sh -c "$(curl -fsSL {{ oh_my_zsh_install_url }})"
+    #   args:
+    #     executable: /bin/bash
+    #     creates: ~/.oh-my-zsh
+    #   environment:
+    #     RUNZSH: "no"
 
     - name: Install powerlevel10k
       ansible.builtin.git:

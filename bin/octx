@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+#
+# octx — fuzzy-pick an OpenShift/Kubernetes cluster and switch to it.
+#
+# Usage:
+#   octx [filter]      Pick a cluster (by short name) and switch to it.
+#   octx -n [filter]   Pick a cluster + namespace (one row per context).
+#   octx -h            Show this help.
+#
+# Cluster names are trimmed for display (api-<name>-<domain>:6443 becomes 
+# <name>). Selecting one runs `oc config use-context`, updating your
+# kubeconfig globally. In default mode clusters are de-duplicated; selecting one
+# lands on your current context for that cluster, else its default-namespace one.
+
+set -euo pipefail
+
+die() { printf 'octx: %s\n' "$1" >&2; exit 1; }
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+# Trim an OpenShift cluster string to its short name (mirrors the p10k prompt).
+trim_cluster() {
+  local c=${1%%:*}                 # drop :6443 port
+  c=${c#api-}                      # drop api- prefix
+  c=${c%%[-.]openshift*}           # drop base domain (-openshift-* or .openshift.*)
+  printf '%s' "$c"
+}
+
+command -v oc  >/dev/null 2>&1 || die "'oc' not found"
+command -v fzf >/dev/null 2>&1 || die "'fzf' not found"
+
+pick_ns=0
+case "${1:-}" in
+  -h|--help) usage 0 ;;
+  -n)        pick_ns=1; shift ;;
+esac
+filter="${1:-}"
+
+current=$(oc config current-context 2>/dev/null || true)
+
+# name<TAB>cluster<TAB>namespace for every context (local read, no network).
+data=$(oc config view -o jsonpath='{range .contexts[*]}{.name}{"\t"}{.context.cluster}{"\t"}{.context.namespace}{"\n"}{end}' 2>/dev/null) \
+  || die "failed to read kubeconfig"
+[ -n "$data" ] || die "no contexts found in kubeconfig"
+
+# Header shows the cluster you're currently on.
+curcluster=$(printf '%s\n' "$data" | awk -F'\t' -v cur="$current" '$1==cur{print $2; exit}')
+if [ -n "$curcluster" ]; then
+  header="current: $(trim_cluster "$curcluster")"
+else
+  header="current: <none>"
+fi
+
+if [ "$pick_ns" -eq 1 ]; then
+  prompt='cluster / namespace> '
+else
+  prompt='cluster> '
+fi
+
+# Build the fzf menu: visible "[mark]cluster[ namespace]" + hidden TAB + context name.
+sel=$(printf '%s\n' "$data" | awk -F'\t' -v nmode="$pick_ns" -v cur="$current" '
+  function trim(c) {
+    sub(/:.*/, "", c); sub(/^api-/, "", c); sub(/[-.]openshift.*$/, "", c)
+    return c
+  }
+  {
+    name=$1; cluster=$2; ns=$3
+    if (cluster == "") next
+    if (ns == "") ns = "default"
+    tc = trim(cluster)
+    if (name == cur) curtc = tc
+    if (nmode == "1") {
+      mark = (name == cur ? "● " : "  ")
+      printf "%s%s / %s\t%s\n", mark, tc, ns, name
+    } else {
+      # De-dup by cluster; pick the best representative context:
+      # current (3) > default namespace (2) > anything else (1).
+      p = (name == cur ? 3 : (ns == "default" ? 2 : 1))
+      if (!(tc in seen)) ord[++n] = tc
+      if (!(tc in seen) || p > prio[tc]) { seen[tc] = name; prio[tc] = p }
+    }
+  }
+  END {
+    if (nmode != "1")
+      for (i = 1; i <= n; i++) {
+        tc = ord[i]; mark = (tc == curtc ? "● " : "  ")
+        printf "%s%s\t%s\n", mark, tc, seen[tc]
+      }
+  }
+' | fzf --delimiter='\t' --with-nth=1 --height=40% --reverse \
+        --prompt="$prompt" --query="$filter" --select-1 \
+        --header="$header") || exit $?
+
+[ -n "$sel" ] || exit 0
+ctx=${sel#*$'\t'}    # text after the TAB is the real context name
+
+oc config use-context "$ctx" >/dev/null
+
+# Friendly confirmation: trimmed cluster / namespace of what we switched to.
+line=$(printf '%s\n' "$data" | awk -F'\t' -v c="$ctx" '$1==c{print; exit}')
+selns=$(printf '%s' "$line" | cut -f3); [ -n "$selns" ] || selns=default
+printf '→ %s / %s\n' "$(trim_cluster "$(printf '%s' "$line" | cut -f2)")" "$selns"
